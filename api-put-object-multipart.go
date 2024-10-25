@@ -31,7 +31,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/chia-network/go-modules/pkg/slogs"
 	"github.com/google/uuid"
+
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 )
@@ -290,21 +292,25 @@ type uploadPartParams struct {
 func (c *Client) uploadPart(ctx context.Context, p uploadPartParams) (ObjectPart, error) {
 	// Input validation.
 	if err := s3utils.CheckValidBucketName(p.bucketName); err != nil {
-		return ObjectPart{}, err
+		return ObjectPart{}, fmt.Errorf("uploadPart CheckValidBucketName failed: %w", err)
 	}
 	if err := s3utils.CheckValidObjectName(p.objectName); err != nil {
-		return ObjectPart{}, err
+		return ObjectPart{}, fmt.Errorf("uploadPart CheckValidObjectName failed: %w", err)
 	}
 	if p.size > maxPartSize {
+		slogs.Logr.Error("uploadPart errEntityTooLarge reached")
 		return ObjectPart{}, errEntityTooLarge(p.size, maxPartSize, p.bucketName, p.objectName)
 	}
 	if p.size <= -1 {
+		slogs.Logr.Error("uploadPart errEntityTooSmall reached")
 		return ObjectPart{}, errEntityTooSmall(p.size, p.bucketName, p.objectName)
 	}
 	if p.partNumber <= 0 {
+		slogs.Logr.Error("uploadPart part number < 0")
 		return ObjectPart{}, errInvalidArgument("Part number cannot be negative or equal to zero.")
 	}
 	if p.uploadID == "" {
+		slogs.Logr.Error("UploadID cannot be empty.")
 		return ObjectPart{}, errInvalidArgument("UploadID cannot be empty.")
 	}
 
@@ -344,6 +350,7 @@ func (c *Client) uploadPart(ctx context.Context, p uploadPartParams) (ObjectPart
 	resp, err := c.executeMethod(ctx, http.MethodPut, reqMetadata)
 	defer closeResponse(resp)
 	if err != nil {
+		slogs.Logr.Error("uploadPart error in executeMethod", "error", err)
 		return ObjectPart{}, err
 	}
 	if resp != nil {

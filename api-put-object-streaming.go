@@ -47,14 +47,12 @@ func (c *Client) putObjectMultipartStream(ctx context.Context, bucketName, objec
 	reader io.Reader, size int64, opts PutObjectOptions,
 ) (info UploadInfo, err error) {
 	if opts.ConcurrentStreamParts && opts.NumThreads > 1 {
-		slogs.Logr.Debug("minio-go opts.ConcurrentStreamParts && opts.NumThreads > 1")
 		info, err = c.putObjectMultipartStreamParallel(ctx, bucketName, objectName, reader, opts)
 	} else if !isObject(reader) && isReadAt(reader) && !opts.SendContentMd5 {
 		// Verify if the reader implements ReadAt and it is not a *minio.Object then we will use parallel uploader.
 		slogs.Logr.Debug("minio-go !isObject(reader) && isReadAt(reader) && !opts.SendContentMd5")
 		info, err = c.putObjectMultipartStreamFromReadAt(ctx, bucketName, objectName, reader.(io.ReaderAt), size, opts)
 	} else {
-		slogs.Logr.Debug("minio-go fallback putObjectMultipartStreamOptionalChecksum")
 		info, err = c.putObjectMultipartStreamOptionalChecksum(ctx, bucketName, objectName, reader, size, opts)
 	}
 	if err != nil && s3utils.IsGoogleEndpoint(*c.endpointURL) {
@@ -102,10 +100,10 @@ func (c *Client) putObjectMultipartStreamFromReadAt(ctx context.Context, bucketN
 ) (info UploadInfo, err error) {
 	// Input validation.
 	if err = s3utils.CheckValidBucketName(bucketName); err != nil {
-		return UploadInfo{}, err
+		return UploadInfo{}, fmt.Errorf("s3utils.CheckValidBucketName failed: %w", err)
 	}
 	if err = s3utils.CheckValidObjectName(objectName); err != nil {
-		return UploadInfo{}, err
+		return UploadInfo{}, fmt.Errorf("s3utils.CheckValidObjectName failed: %w", err)
 	}
 
 	// Calculate the optimal parts info for a given size.
@@ -126,7 +124,7 @@ func (c *Client) putObjectMultipartStreamFromReadAt(ctx context.Context, bucketN
 	// Initiate a new multipart upload.
 	uploadID, err := c.newUploadID(ctx, bucketName, objectName, opts)
 	if err != nil {
-		return UploadInfo{}, err
+		return UploadInfo{}, fmt.Errorf("c.newUploadID failed: %w", err)
 	}
 	delete(opts.UserMetadata, "X-Amz-Checksum-Algorithm")
 
@@ -136,6 +134,7 @@ func (c *Client) putObjectMultipartStreamFromReadAt(ctx context.Context, bucketN
 	// to relinquish storage space.
 	defer func() {
 		if err != nil {
+			slogs.Logr.Error("something failed in putObjectMultipartStreamFromReadAt", "error", err)
 			c.abortMultipartUpload(ctx, bucketName, objectName, uploadID)
 		}
 	}()
@@ -223,6 +222,7 @@ func (c *Client) putObjectMultipartStreamFromReadAt(ctx context.Context, bucketN
 				}
 				objPart, err := c.uploadPart(ctx, p)
 				if err != nil {
+					slogs.Logr.Error("error happened in uploadPart", "error", err)
 					uploadedPartsCh <- uploadedPartRes{
 						Error: err,
 					}

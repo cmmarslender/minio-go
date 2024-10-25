@@ -39,10 +39,11 @@ import (
 	"time"
 
 	md5simd "github.com/minio/md5-simd"
+	"golang.org/x/net/publicsuffix"
+
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/signer"
-	"golang.org/x/net/publicsuffix"
 )
 
 // Client implements Amazon S3 compatible methods.
@@ -642,7 +643,7 @@ func (c *Client) executeMethod(ctx context.Context, method string, metadata requ
 			// Seek back to beginning for each attempt.
 			if _, err = bodySeeker.Seek(0, 0); err != nil {
 				// If seek failed, no need to retry.
-				return nil, err
+				return nil, fmt.Errorf("executeMethod error seeking back to beginning: %w", err)
 			}
 		}
 
@@ -655,7 +656,7 @@ func (c *Client) executeMethod(ctx context.Context, method string, metadata requ
 				continue // Retry.
 			}
 
-			return nil, err
+			return nil, fmt.Errorf("executeMethod error with newRequest: %w", err)
 		}
 
 		// Initiate the request.
@@ -665,7 +666,7 @@ func (c *Client) executeMethod(ctx context.Context, method string, metadata requ
 				// Retry the request
 				continue
 			}
-			return nil, err
+			return nil, fmt.Errorf("executeRequest c.do error and not retryable: %w", err)
 		}
 
 		// For any known successful http status, return quickly.
@@ -680,7 +681,7 @@ func (c *Client) executeMethod(ctx context.Context, method string, metadata requ
 		// res.Body should be closed
 		closeResponse(res)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error reading response body: %w", err)
 		}
 
 		// Save the body.
@@ -709,7 +710,7 @@ func (c *Client) executeMethod(ctx context.Context, method string, metadata requ
 			case "AccessDenied":
 				if errResponse.Region == "" {
 					// Region is empty we simply return the error.
-					return res, err
+					return res, fmt.Errorf("executeMethod accessdenied: %w", err)
 				}
 				// Region is not empty figure out a way to
 				// handle this appropriately.
@@ -747,10 +748,13 @@ func (c *Client) executeMethod(ctx context.Context, method string, metadata requ
 
 	// Return an error when retry is canceled or deadlined
 	if e := retryCtx.Err(); e != nil {
-		return nil, e
+		return nil, fmt.Errorf("retry canceled or deadlined: %w", e)
 	}
 
-	return res, err
+	if err != nil {
+		return res, fmt.Errorf("other error in executeMethod: %w", err)
+	}
+	return res, nil
 }
 
 // newRequest - instantiate a new HTTP request for a given method.

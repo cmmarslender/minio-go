@@ -341,31 +341,25 @@ func (c *Client) putObjectCommon(ctx context.Context, bucketName, objectName str
 	}
 
 	if c.overrideSignerType.IsV2() {
-		slogs.Logr.Debug("minio-go c.overrideSignerType.IsV2")
 		if size >= 0 && size < int64(partSize) || opts.DisableMultipart {
 			slogs.Logr.Debug("minio-go size >= 0 && size < int64(partSize) || opts.DisableMultipart")
 			return c.putObject(ctx, bucketName, objectName, reader, size, opts)
 		}
-		slogs.Logr.Debug("minio-go NOT (size >= 0 && size < int64(partSize) || opts.DisableMultipart)")
 		return c.putObjectMultipart(ctx, bucketName, objectName, reader, size, opts)
 	}
 
 	slogs.Logr.Debug("minio-go NOT (c.overrideSignerType.IsV2)")
 	if size < 0 {
-		slogs.Logr.Debug("minio-go (size < 0)")
 		if opts.DisableMultipart {
 			return UploadInfo{}, errors.New("no length provided and multipart disabled")
 		}
 		if opts.ConcurrentStreamParts && opts.NumThreads > 1 {
-			slogs.Logr.Debug("minio-go (size < 0) and (opts.ConcurrentStreamParts && opts.NumThreads > 1)")
 			return c.putObjectMultipartStreamParallel(ctx, bucketName, objectName, reader, opts)
 		}
-		slogs.Logr.Debug("minio-go (size < 0) and NOT (opts.ConcurrentStreamParts && opts.NumThreads > 1)")
 		return c.putObjectMultipartStreamNoLength(ctx, bucketName, objectName, reader, opts)
 	}
 
 	if size <= int64(partSize) || opts.DisableMultipart {
-		slogs.Logr.Debug("minio-go size <= int64(partSize) || opts.DisableMultipart - calling putObject")
 		return c.putObject(ctx, bucketName, objectName, reader, size, opts)
 	}
 
