@@ -38,6 +38,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/chia-network/go-modules/pkg/slogs"
 	md5simd "github.com/minio/md5-simd"
 	"golang.org/x/net/publicsuffix"
 
@@ -555,13 +556,19 @@ func (c *Client) do(req *http.Request) (resp *http.Response, err error) {
 				}
 			}
 		}
-		return nil, err
+		return nil, fmt.Errorf("error in httpClient.do: %w", err)
 	}
 
 	// Response cannot be non-nil, report error if thats the case.
 	if resp == nil {
+		if c.isTraceEnabled && !(c.traceErrorsOnly && resp.StatusCode == http.StatusOK) {
+			err = c.dumpHTTP(req, resp)
+			if err != nil {
+				return nil, err
+			}
+		}
 		msg := "Response is empty. " + reportIssue
-		return nil, errInvalidArgument(msg)
+		return nil, fmt.Errorf("error due to resp == nil: %w", errInvalidArgument(msg))
 	}
 
 	// If trace is enabled, dump http request and response,
@@ -663,6 +670,7 @@ func (c *Client) executeMethod(ctx context.Context, method string, metadata requ
 		res, err = c.do(req)
 		if err != nil {
 			if isRequestErrorRetryable(ctx, err) {
+				slogs.Logr.Error("got error but error is retryable", "error", err)
 				// Retry the request
 				continue
 			}
