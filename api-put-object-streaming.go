@@ -29,7 +29,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/chia-network/go-modules/pkg/slogs"
 	"github.com/google/uuid"
+
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 )
 
@@ -45,11 +47,14 @@ func (c *Client) putObjectMultipartStream(ctx context.Context, bucketName, objec
 	reader io.Reader, size int64, opts PutObjectOptions,
 ) (info UploadInfo, err error) {
 	if opts.ConcurrentStreamParts && opts.NumThreads > 1 {
+		slogs.Logr.Debug("minio-go opts.ConcurrentStreamParts && opts.NumThreads > 1")
 		info, err = c.putObjectMultipartStreamParallel(ctx, bucketName, objectName, reader, opts)
 	} else if !isObject(reader) && isReadAt(reader) && !opts.SendContentMd5 {
 		// Verify if the reader implements ReadAt and it is not a *minio.Object then we will use parallel uploader.
+		slogs.Logr.Debug("minio-go !isObject(reader) && isReadAt(reader) && !opts.SendContentMd5")
 		info, err = c.putObjectMultipartStreamFromReadAt(ctx, bucketName, objectName, reader.(io.ReaderAt), size, opts)
 	} else {
+		slogs.Logr.Debug("minio-go fallback putObjectMultipartStreamOptionalChecksum")
 		info, err = c.putObjectMultipartStreamOptionalChecksum(ctx, bucketName, objectName, reader, size, opts)
 	}
 	if err != nil && s3utils.IsGoogleEndpoint(*c.endpointURL) {

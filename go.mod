@@ -3,6 +3,7 @@ module github.com/minio/minio-go/v7
 go 1.22
 
 require (
+	github.com/chia-network/go-modules v0.0.7
 	github.com/dustin/go-humanize v1.0.1
 	github.com/go-ini/ini v1.67.0
 	github.com/goccy/go-json v0.10.3
